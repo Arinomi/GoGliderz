@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
 	"time"
 )
@@ -13,15 +13,22 @@ func uptime() time.Duration {
 	return time.Since(startTime)
 }
 
-/*type apiInfo struct {
-	Uptime		time.Duration 	`json:"uptime"`
-	Info		string 			`json:"info"`
-	Version		string 			`json:"version"`
-}*/
+type apiInfo struct {
+	Uptime  time.Duration `json:"uptime"`
+	Info    string        `json:"info"`
+	Version string        `json:"version"`
+}
 
 func handlerAPI(w http.ResponseWriter, r *http.Request) {
 	http.Header.Add(w.Header(), "content-type", "application/json")
-	fmt.Fprintln(w, "Uptime:", uptime())
+
+	info := apiInfo{uptime(), "Service for IGC tracks.", "v1"}
+
+	jsresp, err := json.Marshal(info)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write(jsresp)
 }
 
 func main() {
