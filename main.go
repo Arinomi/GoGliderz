@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/marni/goigc"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,15 +14,18 @@ var startTime = time.Now()
 var trackMAP = make(map[int]trackInfo)
 var ids []int
 
-// TODO: Make this print out in ISO 8061 standard
-func uptime() time.Duration {
-	return time.Since(startTime)
+func uptime() string {
+	now := time.Now()
+	now.Format(time.RFC3339)
+	startTime.Format(time.RFC3339)
+
+	return now.Sub(startTime).String()
 }
 
 type apiInfo struct {
-	Uptime  time.Duration `json:"uptime"`
-	Info    string        `json:"info"`
-	Version string        `json:"version"`
+	Uptime  string `json:"uptime"`
+	Info    string `json:"info"`
+	Version string `json:"version"`
 }
 
 type trackInfo struct {
@@ -34,11 +36,11 @@ type trackInfo struct {
 	Distance float64   `json:"distance"`
 }
 
-func newTrack(url string) {
+func newTrack(url string) int {
 	newTrack, err := igc.ParseLocation(url)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return 0
 	}
 
 	track := trackInfo{
@@ -50,9 +52,10 @@ func newTrack(url string) {
 
 	trackMAP[len(trackMAP)+1] = track
 	ids = append(ids, len(ids)+1)
+	return len(ids)
 }
 
-func handlerAPI(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func handlerAPI(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	http.Header.Add(w.Header(), "content-type", "application/json")
 
 	info := apiInfo{uptime(), "Service for IGC tracks.", "v1"}
@@ -82,20 +85,29 @@ func handlerIGC(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 			return
 		}
 	case "POST":
-		body, err := ioutil.ReadAll(r.Body)
+		input := make(map[string]interface{})
+		_ = json.NewDecoder(r.Body).Decode(&input)
+
+		newID := newTrack(input["url"].(string))
+		if newID == 0 {
+			http.Error(w, "Not able to process the URL", http.StatusBadRequest)
+			return
+		}
+
+		jsresp, err := json.Marshal(map[string]int{"id": newID})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		fmt.Println(string(body))
-		http.Error(w, "Not implemented", http.StatusNotImplemented)
-		return
+
+		w.Write(jsresp)
 	default:
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 }
 
-func handlerID(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func handlerID(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
 	if len(trackMAP) > 0 && len(ids) > 0 {
 		http.Header.Add(w.Header(), "content-type", "application/json")
 
@@ -122,7 +134,7 @@ func handlerID(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	}
 }
 
-func handlerField(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func handlerField(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
 	if len(trackMAP) > 0 && len(ids) > 0 {
 
 		id, err := strconv.Atoi(ps[0].Value)
@@ -162,9 +174,9 @@ func handlerField(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 func main() {
 	fmt.Println("Running...")
 	router := httprouter.New()
-	newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Madrid%20to%20Jerez.igc")
-	newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Jarez%20to%20Senegal.igc")
-	newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Boavista%20Medellin.igc")
+	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Madrid%20to%20Jerez.igc")
+	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Jarez%20to%20Senegal.igc")
+	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Boavista%20Medellin.igc")
 	router.GET("/igcinfo/api", handlerAPI)
 	router.GET("/igcinfo/api/igc", handlerIGC)
 	router.GET("/igcinfo/api/igc/:id", handlerID)
