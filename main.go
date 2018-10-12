@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/marni/goigc"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -81,6 +82,11 @@ func handlerIGC(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 			return
 		}
 	case "POST":
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		fmt.Println(string(body))
 		http.Error(w, "Not implemented", http.StatusNotImplemented)
 		return
 	default:
@@ -89,10 +95,11 @@ func handlerIGC(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	}
 }
 
-func handlerID(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+func handlerID(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	if len(trackMAP) > 0 && len(ids) > 0 {
 		http.Header.Add(w.Header(), "content-type", "application/json")
-		id, err := strconv.Atoi(param[0].Value)
+
+		id, err := strconv.Atoi(ps[0].Value)
 		if err != nil {
 			http.Error(w, "Please provide a valid ID.", http.StatusBadRequest)
 			return
@@ -115,18 +122,54 @@ func handlerID(w http.ResponseWriter, r *http.Request, param httprouter.Params) 
 	}
 }
 
+func handlerField(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if len(trackMAP) > 0 && len(ids) > 0 {
+
+		id, err := strconv.Atoi(ps[0].Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		field := ps[1].Value
+
+		switch field {
+		case "pilot":
+			w.Write([]byte(trackMAP[id].Pilot))
+
+		case "glider":
+			w.Write([]byte(trackMAP[id].Glider))
+
+		case "glider_id":
+			w.Write([]byte(trackMAP[id].GliderID))
+
+		case "calculated total track length":
+			distString := strconv.FormatFloat(trackMAP[id].Distance, 'f', -1, 64)
+			w.Write([]byte(distString))
+
+		case "H_date":
+			w.Write([]byte(trackMAP[id].Date.Format(time.RFC3339)))
+
+		default:
+			http.Error(w, "Not a valid field", http.StatusBadRequest)
+		}
+
+	} else {
+		http.Error(w, "No files found", http.StatusNotFound)
+	}
+}
+
 func main() {
 	fmt.Println("Running...")
 	router := httprouter.New()
 	newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Madrid%20to%20Jerez.igc")
 	newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Jarez%20to%20Senegal.igc")
 	newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Boavista%20Medellin.igc")
-	/*http.HandleFunc("/igcinfo/api", handlerAPI)
-	http.HandleFunc("/igcinfo/api/igc", handlerIGC)
-	http.HandleFunc("/igcinfo/api/igc/:id", handlerID)*/
 	router.GET("/igcinfo/api", handlerAPI)
 	router.GET("/igcinfo/api/igc", handlerIGC)
 	router.GET("/igcinfo/api/igc/:id", handlerID)
+	router.POST("/igcinfo/api/igc", handlerIGC)
+	router.GET("/igcinfo/api/igc/:id/:field", handlerField)
 
 	http.ListenAndServe("127.0.0.1:8080", router)
 }
