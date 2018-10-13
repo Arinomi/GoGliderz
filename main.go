@@ -1,27 +1,19 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/marni/goigc"
 	"net/http"
-	"strconv"
 	"time"
 )
 
+// global variable init
 var startTime = time.Now()
 var trackMAP = make(map[int]trackInfo)
 var ids []int
 
-func uptime() string {
-	now := time.Now()
-	now.Format(time.RFC3339)
-	startTime.Format(time.RFC3339)
-
-	return now.Sub(startTime).String()
-}
-
+// struct init
 type apiInfo struct {
 	Uptime  string `json:"uptime"`
 	Info    string `json:"info"`
@@ -36,6 +28,17 @@ type trackInfo struct {
 	Distance float64   `json:"distance"`
 }
 
+// returning uptime as a string in ISO 8601/RFC3339 format
+func uptime() string {
+	now := time.Now()
+	now.Format(time.RFC3339)
+	startTime.Format(time.RFC3339)
+
+	return now.Sub(startTime).String()
+}
+
+// creates a new track from the presented url and returns its ID
+// returns 0 if the url was invalid
 func newTrack(url string) int {
 	newTrack, err := igc.ParseLocation(url)
 	if err != nil {
@@ -55,133 +58,23 @@ func newTrack(url string) int {
 	return len(ids)
 }
 
-func handlerAPI(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-	http.Header.Add(w.Header(), "content-type", "application/json")
-
-	info := apiInfo{uptime(), "Service for IGC tracks.", "v1"}
-
-	jsresp, err := json.Marshal(info)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(jsresp)
-}
-
-func handlerIGC(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	http.Header.Add(w.Header(), "content-type", "application/json")
-
-	switch r.Method {
-	case "GET":
-		if len(trackMAP) > 0 && len(ids) > 0 {
-			jsresp, err := json.Marshal(ids)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(jsresp)
-		} else {
-			http.Error(w, "No files found", http.StatusNotFound)
-			return
-		}
-	case "POST":
-		input := make(map[string]interface{})
-		_ = json.NewDecoder(r.Body).Decode(&input)
-
-		newID := newTrack(input["url"].(string))
-		if newID == 0 {
-			http.Error(w, "Not able to process the URL", http.StatusBadRequest)
-			return
-		}
-
-		jsresp, err := json.Marshal(map[string]int{"id": newID})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Write(jsresp)
-	default:
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		return
-	}
-}
-
-func handlerID(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
-	if len(trackMAP) > 0 && len(ids) > 0 {
-		http.Header.Add(w.Header(), "content-type", "application/json")
-
-		id, err := strconv.Atoi(ps[0].Value)
-		if err != nil {
-			http.Error(w, "Please provide a valid ID.", http.StatusBadRequest)
-			return
-		} else {
-			_, ok := trackMAP[id]
-			if ok {
-				fmt.Println(id)
-				jsresp, err := json.Marshal(trackMAP[id])
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				w.Write(jsresp)
-			} else {
-				http.Error(w, "Given ID not found", http.StatusNotFound)
-			}
-		}
-	} else {
-		http.Error(w, "No files found", http.StatusNotFound)
-	}
-}
-
-func handlerField(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
-	if len(trackMAP) > 0 && len(ids) > 0 {
-
-		id, err := strconv.Atoi(ps[0].Value)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		field := ps[1].Value
-
-		switch field {
-		case "pilot":
-			w.Write([]byte(trackMAP[id].Pilot))
-
-		case "glider":
-			w.Write([]byte(trackMAP[id].Glider))
-
-		case "glider_id":
-			w.Write([]byte(trackMAP[id].GliderID))
-
-		case "calculated total track length":
-			distString := strconv.FormatFloat(trackMAP[id].Distance, 'f', -1, 64)
-			w.Write([]byte(distString))
-
-		case "H_date":
-			w.Write([]byte(trackMAP[id].Date.Format(time.RFC3339)))
-
-		default:
-			http.Error(w, "Not a valid field", http.StatusBadRequest)
-		}
-
-	} else {
-		http.Error(w, "No files found", http.StatusNotFound)
-	}
-}
-
+// main function
 func main() {
-	fmt.Println("Running...")
+	// router init
 	router := httprouter.New()
+
+	// mock data
 	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Madrid%20to%20Jerez.igc")
 	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Jarez%20to%20Senegal.igc")
 	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Boavista%20Medellin.igc")
+
+	// routes init
 	router.GET("/igcinfo/api", handlerAPI)
 	router.GET("/igcinfo/api/igc", handlerIGC)
 	router.GET("/igcinfo/api/igc/:id", handlerID)
 	router.POST("/igcinfo/api/igc", handlerIGC)
 	router.GET("/igcinfo/api/igc/:id/:field", handlerField)
 
+	// server init
 	http.ListenAndServe("127.0.0.1:8080", router)
 }
