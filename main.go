@@ -84,5 +84,5 @@ func main() {
 	router.GET("/igcinfo/api/igc/:id/:field", handlerField)
 
 	// server init
-	http.ListenAndServe("127.0.0.1:8080", router)
+	http.ListenAndServe(":8080", router)
 }
