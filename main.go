@@ -5,6 +5,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/marni/goigc"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -71,6 +72,14 @@ func newTrack(url string) int {
 	return len(ids)
 }
 
+func getPort() string {
+	p := os.Getenv("PORT")
+	if p != "" {
+		return ":" + p
+	}
+	return ":80"
+}
+
 // main function
 func main() {
 	// router init
@@ -84,5 +93,5 @@ func main() {
 	router.GET("/igcinfo/api/igc/:id/:field", handlerField)
 
 	// server init
-	http.ListenAndServe(":8080", router)
+	http.ListenAndServe(getPort(), router)
 }
