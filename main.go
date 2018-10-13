@@ -9,9 +9,9 @@ import (
 )
 
 // global variable init
-var startTime = time.Now()
-var trackMAP = make(map[int]trackInfo)
-var ids []int
+var startTime = time.Now().Truncate(time.Second) // starting time
+var trackMAP = make(map[int]trackInfo)           // map of trackInfo structs
+var ids []int                                    // array of ids
 
 // struct init
 type apiInfo struct {
@@ -30,11 +30,24 @@ type trackInfo struct {
 
 // returning uptime as a string in ISO 8601/RFC3339 format
 func uptime() string {
-	now := time.Now()
-	now.Format(time.RFC3339)
-	startTime.Format(time.RFC3339)
+	now := time.Now().Truncate(time.Second)
+
+	// formatting using the example string from the Wikipedia page
+	now.Format("P3Y6M4DT12H30M5S")
+	startTime.Format("P3Y6M4DT12H30M5S")
 
 	return now.Sub(startTime).String()
+}
+
+// calculating the total distance using the track's points
+func distance(p igc.Track) float64 {
+	d := 0.0
+
+	for i := 0; i < len(p.Points)-1; i++ {
+		d += p.Points[i].Distance(p.Points[i+1])
+	}
+
+	return d
 }
 
 // creates a new track from the presented url and returns its ID
@@ -51,7 +64,7 @@ func newTrack(url string) int {
 		newTrack.Pilot,
 		newTrack.GliderType,
 		newTrack.GliderID,
-		newTrack.Task.Distance()}
+		distance(newTrack)}
 
 	trackMAP[len(trackMAP)+1] = track
 	ids = append(ids, len(ids)+1)
@@ -62,11 +75,6 @@ func newTrack(url string) int {
 func main() {
 	// router init
 	router := httprouter.New()
-
-	// mock data
-	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Madrid%20to%20Jerez.igc")
-	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Jarez%20to%20Senegal.igc")
-	_ = newTrack("http://skypolaris.org/wp-content/uploads/IGS%20Files/Boavista%20Medellin.igc")
 
 	// routes init
 	router.GET("/igcinfo/api", handlerAPI)
