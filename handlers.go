@@ -29,17 +29,12 @@ func handlerIGC(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 	switch r.Method {
 	case "GET":
-		if len(trackMAP) > 0 && len(ids) > 0 {
-			jsresp, err := json.Marshal(ids)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(jsresp)
-		} else {
-			http.Error(w, "No files found", http.StatusNotFound)
+		jsresp, err := json.Marshal(ids)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Write(jsresp)
 	case "POST":
 		input := make(map[string]interface{})
 		_ = json.NewDecoder(r.Body).Decode(&input)

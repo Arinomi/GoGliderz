@@ -12,7 +12,7 @@ import (
 // global variable init
 var startTime = time.Now().Truncate(time.Second) // starting time
 var trackMAP = make(map[int]trackInfo)           // map of trackInfo structs
-var ids []int                                    // array of ids
+var ids = make([]int, 0)                         // array of ids
 
 // struct init
 type apiInfo struct {
